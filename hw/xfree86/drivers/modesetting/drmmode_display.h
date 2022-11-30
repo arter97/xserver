@@ -135,6 +135,7 @@ typedef struct {
     Bool async_flip_secondaries;
     Bool dri2_enable;
     Bool present_enable;
+    Bool tearfree_enable;
 
     uint32_t vrr_prop_id;
     Bool use_ctm;
@@ -167,6 +168,17 @@ typedef struct {
 } drmmode_format_rec, *drmmode_format_ptr;
 
 typedef struct {
+    struct {
+        drmmode_bo bo;
+        uint32_t fb_id;
+        PixmapPtr px;
+        RegionRec dmg;
+    } buf[2];
+    uint32_t back_idx;
+    uint32_t flip_seq;
+} drmmode_tearfree_rec, *drmmode_tearfree_ptr;
+
+typedef struct {
     drmmode_ptr drmmode;
     drmModeCrtcPtr mode_crtc;
     uint32_t vblank_pipe;
@@ -184,6 +196,7 @@ typedef struct {
 
     drmmode_bo rotate_bo;
     unsigned rotate_fb_id;
+    drmmode_tearfree_rec tearfree;
 
     PixmapPtr prime_pixmap;
     PixmapPtr prime_pixmap_back;
@@ -308,6 +321,7 @@ void drmmode_get_default_bpp(ScrnInfoPtr pScrn, drmmode_ptr drmmmode,
                              int *depth, int *bpp);
 
 void drmmode_copy_fb(ScrnInfoPtr pScrn, drmmode_ptr drmmode);
+void drmmode_copy_damage(xf86CrtcPtr crtc, PixmapPtr dst, RegionPtr damage);
 
 int drmmode_crtc_flip(xf86CrtcPtr crtc, uint32_t fb_id, uint32_t flags, void *data);
 

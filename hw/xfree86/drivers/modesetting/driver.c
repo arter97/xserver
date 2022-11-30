@@ -145,6 +145,7 @@ static const OptionInfoRec Options[] = {
     {OPTION_VARIABLE_REFRESH, "VariableRefresh", OPTV_BOOLEAN, {0}, FALSE},
     {OPTION_USE_GAMMA_LUT, "UseGammaLUT", OPTV_BOOLEAN, {0}, FALSE},
     {OPTION_ASYNC_FLIP_SECONDARIES, "AsyncFlipSecondaries", OPTV_BOOLEAN, {0}, FALSE},
+    {OPTION_TEARFREE, "TearFree", OPTV_BOOLEAN, {0}, FALSE},
     {-1, NULL, OPTV_NONE, {0}, FALSE}
 };
 
@@ -515,6 +516,62 @@ GetRec(ScrnInfoPtr pScrn)
     return TRUE;
 }
 
+static void
+ms_tearfree_update_damages(ScrnInfoPtr scrn, RegionPtr dirty)
+{
+    xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(scrn);
+    modesettingPtr ms = modesettingPTR(scrn);
+    int c, i;
+
+    if (!ms->drmmode.tearfree_enable)
+        return;
+
+    for (c = 0; c < xf86_config->num_crtc; c++) {
+        xf86CrtcPtr crtc = xf86_config->crtc[c];
+        drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+        drmmode_tearfree_ptr trf = &drmmode_crtc->tearfree;
+        RegionRec region;
+
+        /* Skip CRTCs which aren't using tearfree */
+        if (!trf->buf[0].px)
+            continue;
+
+        /* Compute how much of the damage intersects with this CRTC */
+        RegionInit(&region, &crtc->bounds, 0);
+        RegionIntersect(&region, &region, dirty);
+        for (i = 0; i < ARRAY_SIZE(trf->buf); i++)
+            RegionUnion(&trf->buf[i].dmg, &trf->buf[i].dmg, &region);
+    }
+}
+
+static void
+ms_tearfree_do_flips(ScreenPtr pScreen)
+{
+#ifdef GLAMOR_HAS_GBM
+    ScrnInfoPtr scrn = xf86ScreenToScrn(pScreen);
+    xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(scrn);
+    modesettingPtr ms = modesettingPTR(scrn);
+    int c;
+
+    if (!ms->drmmode.tearfree_enable)
+        return;
+
+    for (c = 0; c < xf86_config->num_crtc; c++) {
+        xf86CrtcPtr crtc = xf86_config->crtc[c];
+        drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+        drmmode_tearfree_ptr trf = &drmmode_crtc->tearfree;
+
+        /* Skip disabled CRTCs and those which aren't using tearfree */
+        if (!trf->buf[0].px || !crtc->scrn->vtSema || !xf86_crtc_on(crtc))
+            continue;
+
+        /* Flip if the last flip finished and the front buffer is damaged */
+        if (!trf->flip_seq && !RegionNil(&trf->buf[trf->back_idx ^ 1].dmg))
+            ms_do_tearfree_flip(pScreen, crtc);
+    }
+#endif
+}
+
 static int
 dispatch_dirty_region(ScrnInfoPtr scrn,
                       PixmapPtr pixmap, DamagePtr damage, int fb_id)
@@ -552,6 +609,7 @@ dispatch_dirty_region(ScrnInfoPtr scrn,
         }
 
         free(clip);
+        ms_tearfree_update_damages(scrn, dirty);
         DamageEmpty(damage);
     }
     return ret;
@@ -707,6 +765,7 @@ msBlockHandler(ScreenPtr pScreen, void *timeout)
         dispatch_dirty(pScreen);
 
     ms_dirty_update(pScreen, timeout);
+    ms_tearfree_do_flips(pScreen);
 }
 
 static void
@@ -1212,6 +1271,21 @@ PreInit(ScrnInfoPtr pScrn, int flags)
 
     ms->drmmode.pageflip =
         xf86ReturnOptValBool(ms->drmmode.Options, OPTION_PAGEFLIP, TRUE);
+#ifdef GLAMOR_HAS_GBM
+    ms->drmmode.tearfree_enable =
+        xf86ReturnOptValBool(ms->drmmode.Options, OPTION_TEARFREE, FALSE);
+    if (ms->drmmode.tearfree_enable) {
+        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "TearFree: enabled\n");
+
+        /*
+         * Disable PageFlip when TearFree is enabled, since TearFree already
+         * does page flips. TearFree is more efficient at flipping too, since it
+         * uses damage tracking to minimize buffer copying and skip unnecessary
+         * flips when the screen's contents have not changed.
+         */
+        ms->drmmode.pageflip = FALSE;
+    }
+#endif
 
     pScrn->capabilities = 0;
     ret = drmGetCap(ms->fd, DRM_CAP_PRIME, &value);
