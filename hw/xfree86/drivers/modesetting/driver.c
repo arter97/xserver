@@ -145,7 +145,7 @@ static const OptionInfoRec Options[] = {
     {OPTION_VARIABLE_REFRESH, "VariableRefresh", OPTV_BOOLEAN, {0}, FALSE},
     {OPTION_USE_GAMMA_LUT, "UseGammaLUT", OPTV_BOOLEAN, {0}, FALSE},
     {OPTION_ASYNC_FLIP_SECONDARIES, "AsyncFlipSecondaries", OPTV_BOOLEAN, {0}, FALSE},
-    {OPTION_TEARFREE, "TearFree", OPTV_BOOLEAN, {0}, FALSE},
+    {OPTION_TEARFREE, "TearFree", OPTV_BOOLEAN, {0}, TRUE},
     {-1, NULL, OPTV_NONE, {0}, FALSE}
 };
 
@@ -1273,7 +1273,7 @@ PreInit(ScrnInfoPtr pScrn, int flags)
         xf86ReturnOptValBool(ms->drmmode.Options, OPTION_PAGEFLIP, TRUE);
 #ifdef GLAMOR_HAS_GBM
     ms->drmmode.tearfree_enable =
-        xf86ReturnOptValBool(ms->drmmode.Options, OPTION_TEARFREE, FALSE);
+        xf86ReturnOptValBool(ms->drmmode.Options, OPTION_TEARFREE, TRUE);
     if (ms->drmmode.tearfree_enable) {
         xf86DrvMsg(pScrn->scrnIndex, X_INFO, "TearFree: enabled\n");
 
