@@ -866,3 +866,20 @@ miSpriteComputeSaved(DeviceIntPtr pDev, ScreenPtr pScreen)
     pCursorInfo->saved.x2 = pCursorInfo->saved.x1 + w + wpad * 2;
     pCursorInfo->saved.y2 = pCursorInfo->saved.y1 + h + hpad * 2;
 }
+
+void
+miDCSaveUnderCursor2(ScreenPtr pScreen)
+{
+	DeviceIntPtr pDev;
+	miCursorInfoPtr pCursorInfo;
+
+	for (pDev = inputInfo.devices; pDev; pDev = pDev->next) {
+		if (DevHasCursor(pDev)) {
+			pCursorInfo = GetSprite(pDev);
+			if (pCursorInfo && pCursorInfo->isUp
+			    && pCursorInfo->pScreen == pScreen) {
+				miSpriteSaveUnderCursor(pDev, pScreen);
+			}
+		}
+	}
+}

@@ -127,4 +127,6 @@ extern _X_EXPORT DevPrivateKeyRec miPointerScreenKeyRec;
 
 #define miPointerScreenKey (&miPointerScreenKeyRec)
 
+extern _X_EXPORT void miDCSaveUnderCursor2(ScreenPtr pScreen);
+
 #endif                          /* MIPOINTER_H */

@@ -37,6 +37,9 @@
 #include <unistd.h>
 #include <X11/X.h>
 #include <pciaccess.h>
+#if defined(__linux__) || defined(__NetBSD__)
+#include <xf86drm.h>
+#endif
 #include "os.h"
 #include "Pci.h"
 #include "xf86.h"
@@ -1174,7 +1177,23 @@ xf86VideoPtrToDriverList(struct pci_device *dev, XF86MatchedDrivers *md)
 		case 0x0bef:
 			/* Use fbdev/vesa driver on Oaktrail, Medfield, CDV */
 			break;
-		default:
+		/* Default to intel only on pre-gen4 chips */
+		case 0x3577:
+		case 0x2562:
+		case 0x3582:
+		case 0x358e:
+		case 0x2572:
+		case 0x2582:
+		case 0x258a:
+		case 0x2592:
+		case 0x2772:
+		case 0x27a2:
+		case 0x27ae:
+		case 0x29b2:
+		case 0x29c2:
+		case 0x29d2:
+		case 0xa001:
+		case 0xa011:
 			driverList[0] = "intel";
 			break;
         }
@@ -1191,9 +1210,29 @@ xf86VideoPtrToDriverList(struct pci_device *dev, XF86MatchedDrivers *md)
         int idx = 0;
 
 #if defined(__linux__) || defined(__NetBSD__)
+        char busid[32];
+        int fd;
+
+        snprintf(busid, sizeof(busid), "pci:%04x:%02x:%02x.%d",
+                 dev->domain, dev->bus, dev->dev, dev->func);
+
+	/* 'modesetting' is preferred for GeForce 8 and newer GPUs */
+        fd = drmOpenWithType("nouveau", busid, DRM_NODE_RENDER);
+        if (fd >= 0) {
+            uint64_t args[] = { 11 /* NOUVEAU_GETPARAM_CHIPSET_ID */, 0 };
+            int ret = drmCommandWriteRead(fd, 0 /* DRM_NOUVEAU_GETPARAM */,
+                                          &args, sizeof(args));
+            drmClose(fd);
+            if (ret == 0) {
+                if (args[1] == 0x050 || args[1] >= 0x80)
+                    break;
+            }
+        }
+
         driverList[idx++] = "nouveau";
-#endif
+#else
         driverList[idx++] = "nv";
+#endif
         break;
     }
     case 0x1106:

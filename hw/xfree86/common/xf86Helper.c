@@ -1135,10 +1135,10 @@ static void xf86_mkdir_p(char *path)
 
     while ((sep = strchr(sep + 1, '/'))) {
         *sep = 0;
-        (void)mkdir(path, 0777);
+        (void)mkdir(path, 0700);
         *sep = '/';
     }
-    (void)mkdir(path, 0777);
+    (void)mkdir(path, 0700);
 }
 
 void
@@ -1508,7 +1508,13 @@ xf86LoadOneModule(const char *name, void *opt)
 void
 xf86UnloadSubModule(void *mod)
 {
+    /*
+     * This is disabled for now.  The loader isn't smart enough yet to undo
+     * relocations.
+     */
+#if 0
     UnloadSubModule(mod);
+#endif
 }
 
 Bool
